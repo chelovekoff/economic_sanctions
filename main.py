@@ -1,40 +1,57 @@
 import pandas as pd
 #import numpy as np
+from scipy import stats
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 
-def rolling_beta(ri_rf, rm_rf, window_size):
-    beta_values = [float('nan')] * (window_size - 1)  # to match the length of the input array
-    for i in range(window_size, len(ri_rf) + 1):
-        Y = ri_rf[i-window_size:i].values
-        X = rm_rf[i-window_size:i].values
-        # Add constant to the array to perform an OLS regression
-        X = sm.add_constant(X)
-        model = sm.OLS(Y, X).fit()
-        # Extract just the beta coefficient
-        beta = model.params[1]
-        beta_values.append(beta)
-    return beta_values
-
 def returns_calc(stock, risk_free, market):
+    
+    # Calculation of the day risk-free rate:
+    risk_free.columns = ['r_f']
+    risk_free['r_f'] = risk_free['r_f']/100
+    risk_free = (1 + risk_free) ** (1/365) - 1
+    #print("=======\nRF:\n", risk_free.head())
+
+    # Calclulation of the day market return:
+    market = market.sort_values(by='Дата')
+    market.columns = ['m']
+    market['r_m'] = market['m'].pct_change()  
+    #print("=======\nMR:\n", market.head())
+
     try:
-        stock = pd.read_excel(f+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Avg'])
+        # for a single stock
+        stock = pd.read_excel(f+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
         stock = stock.sort_values(by='Дата')
-        stock['r_i'] = stock['Avg'].pct_change() # Factual stock return
+        stock['r_i'] = stock['Закрытие'].pct_change() # Factual stock return
     except:
+        # for a sector index
         stock = pd.read_excel(f+stock+'.xlsx', index_col=0, parse_dates=True)
-        stock.columns = ['index']
+        stock.columns = ['sector_index']
         stock = stock.sort_values(by='Дата')
-        stock['r_i'] = stock['index'].pct_change() # Factual stock return
+        stock['r_i'] = stock['sector_index'].pct_change() # Factual stock return
     stock = pd.merge(stock, risk_free, left_index=True, right_index=True, how='left')
     stock = pd.merge(stock, market['r_m'], left_index=True, right_index=True, how='left')
     stock['ri_rf'] = stock['r_i']- stock['r_f'] # Excess risk-free stock return
-    stock['rm_rf'] = stock['r_m']- stock['r_f'] # excess risk-free market return
-    print(f"=======\n{stock}:\n", stock.head(10))
+    stock['rm_rf'] = stock['r_m']- stock['r_f'] # Excess risk-free market return
+    #print(f"=======\n{stock}:\n", stock.head(10))
     #print(SIBN.isna().sum()) #How many NaN has each column
     stock = stock.dropna(subset=['r_i'])
+
     # Calculate rolling beta
+    def rolling_beta(ri_rf, rm_rf, window_size):
+        beta_values = [float('nan')] * (window_size - 1)  # to match the length of the input array
+        for i in range(window_size, len(ri_rf) + 1):
+            Y = ri_rf[i-window_size:i].values
+            X = rm_rf[i-window_size:i].values
+            # Add constant to the array to perform an OLS regression
+            X = sm.add_constant(X)
+            model = sm.OLS(Y, X).fit()
+            # Extract just the beta coefficient
+            beta = model.params[1]
+            beta_values.append(beta)
+        return beta_values
+
     stock['beta'] = rolling_beta(stock['ri_rf'], stock['rm_rf'], window_size) # Market Beta
     #print(stock.isna().sum()) #How many NaN has each column
     stock = stock.dropna(subset=['beta'])
@@ -55,6 +72,25 @@ def tau_df(sanction_date, df, tau):
     filtered_df['r_cum'] = (1 + filtered_df['r_a']).cumprod() - 1 # Cumulative abnormal return
     return filtered_df 
 
+import pandas as pd
+import numpy as np
+
+# Calcilating an asymptotic confidence interval for CAAR
+def calculate_conf_intervals(df, conf_level):
+    
+    z_score = abs(stats.norm.ppf((1-conf_level)/2)) # Z-score for the conf.level
+    n = len(df.columns) - 1 # Number of CAR values
+    # Calculate the standard deviation for the first n columns for each row
+    std_dev = df.iloc[:, :n].std(axis=1)
+    # Calculate the margin of error
+    margin_of_error = z_score * (std_dev / np.sqrt(n))
+    # Calculate the lower and upper confidence interval bounds
+    df['CI_lower'] = df.iloc[:, -1] - margin_of_error
+    df['CI_upper'] = df.iloc[:, -2] + margin_of_error
+    
+    return df
+
+
 f = "stock_data/"
 window_size = 250
 sanction_dates = ['2022-05-30',
@@ -62,7 +98,9 @@ sanction_dates = ['2022-05-30',
                   '2022-09-02',
                   '2022-10-06',
                   '2022-12-05',
-                  '2023-02-05',
+                  '2023-02-04',
+                  '2023-06-23',#+PR
+                  '2023-12-18',
                   #'2023-06-24' #PR
                   ]
 seven_pacage = '2022-07-21' #The EU implements G7 commitments with its seventh sanctions package by banning imports of gold from Russia, clarifying and expanding on existing export controls, and sanctioning an additional 54 individuals and 10 entities.
@@ -86,25 +124,33 @@ blue_chips = ['CHMF',
               'YNDX'
               ]
 
-tau = 7
+moexog_chips = ['BANEP',
+                'GAZP',
+                'LKOH',
+                'NVTK',
+                'RNFT',
+                'ROSN',
+                'SNGS',
+                'SNGSP',
+                'TATN',
+                'TATNP',
+                'TRNFP',
+]
+
+while True:
+    try:
+        tau = int(input("Input the 'tau' value: "))
+        break  # Exit the loop if successfully converted to an integer.
+    except ValueError:
+        print("Please enter a valid integer.")
+#estimated_stock = input("input the stock for estimation: ")
 
 # Risk-free rate: RUB Yield Curve 1Y
 risk_free = pd.read_excel(f+'rub-yield-curve-1y.xlsx', index_col=0, parse_dates=True)
-risk_free.columns = ['r_f']
-risk_free['r_f'] = risk_free['r_f']/100
-risk_free = (1 + risk_free) ** (1/365) - 1
-#print("=======\nRF:\n", risk_free.head())
 
 # Market return: IMOEX
 market = pd.read_excel(f+'IMOEX.xlsx', index_col=0, parse_dates=True)
-market = market.sort_values(by='Дата')
-market.columns = ['m']
-market['r_m'] = market['m'].pct_change()  
-#print("=======\nMR:\n", market.head())
 
-# Stock return
-SR = returns_calc("MOEXOG", risk_free, market)
-print(SR.head())
 """
 #Stock CAR
 SR_tau = tau_df(sanction_dates[5], SR, tau)
@@ -123,22 +169,35 @@ plt.grid(True)
 #plt.gca().xaxis.set_major_formatter(DateFormatter('%m-%d'))
 plt.show()
 """
-cum_return = pd.DataFrame()
-for sanction in sanction_dates:
-    filtered_df = tau_df(sanction, SR, tau)
-    cum_return[sanction] = filtered_df['r_cum']
-cum_return['CAAR']= cum_return.mean(axis=1)
-print(cum_return)
+cum_av_return = pd.DataFrame() # Dataframe for all CAAR stocks
+for oilstock in moexog_chips:
+    cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
+    # Stock return
+    SR = returns_calc(oilstock, risk_free, market)
+
+    for sanction in sanction_dates:
+        filtered_df = tau_df(sanction, SR, tau) # Only event window
+        cum_return[sanction] = filtered_df['r_cum']
+    cum_return['CAAR']= cum_return.mean(axis=1) # Cumulative average abnormal return
+    calculate_conf_intervals(cum_return, 0.95) # CAAR asymptotic confidence interval
+    cum_av_return['CAAR_'+oilstock] = cum_return['CAAR']
+    #cum_return = None
+    print(cum_return)
+
+    # CAAR plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(cum_return.iloc[:,-3], label='Abnormal return', color='green')
+    # Adding the confidence interval area
+    plt.fill_between(cum_return.index, cum_return.iloc[:,-2], cum_return.iloc[:,-1], color='lightblue', alpha=0.5, label='Confidence Interval')
+    plt.axvline(x=0, color='red', linestyle='--')
+    plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
+    plt.title('Cumulative Average Abnormal Return: ' + oilstock)
+    plt.xlabel('Days')
+    plt.ylabel('Return')
+    plt.grid(True)
+    plt.show()
 
 
-#CAAR
-plt.figure(figsize=(10, 6))
-plt.plot(cum_return['CAAR'], label='Abnormal return', color='green')
-plt.axvline(x=0, color='red', linestyle='--')
-plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
-plt.title('Cumulative Average Abnormal Return: ' + 'MOEXOG')
-plt.xlabel('Days')
-plt.ylabel('Return')
-plt.grid(True)
-plt.show()
-
+print(cum_av_return)
+descr_stats = cum_av_return.iloc[-1].describe()
+print(descr_stats)
