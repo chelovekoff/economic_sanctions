@@ -1,5 +1,5 @@
 import pandas as pd
-#import numpy as np
+import numpy as np
 from scipy import stats
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
@@ -72,9 +72,6 @@ def tau_df(sanction_date, df, tau):
     filtered_df['r_cum'] = (1 + filtered_df['r_a']).cumprod() - 1 # Cumulative abnormal return
     return filtered_df 
 
-import pandas as pd
-import numpy as np
-
 # Calcilating an asymptotic confidence interval for CAAR
 def calculate_conf_intervals(df, conf_level):
     
@@ -83,7 +80,7 @@ def calculate_conf_intervals(df, conf_level):
     # Calculate the standard deviation for the first n columns for each row
     std_dev = df.iloc[:, :n].std(axis=1)
     # Calculate the margin of error
-    margin_of_error = z_score * (std_dev / np.sqrt(n))
+    margin_of_error = z_score * (std_dev / np.sqrt(n))*100
     # Calculate the lower and upper confidence interval bounds
     df['CI_lower'] = df.iloc[:, -1] - margin_of_error
     df['CI_upper'] = df.iloc[:, -2] + margin_of_error
@@ -125,16 +122,17 @@ blue_chips = ['CHMF',
               ]
 
 moexog_chips = ['BANEP',
-                'GAZP',
-                'LKOH',
+                #'GAZP',
+                #'LKOH',
                 'NVTK',
                 'RNFT',
                 'ROSN',
                 'SNGS',
-                'SNGSP',
-                'TATN',
-                'TATNP',
+                #'SNGSP',
+                #'TATN',
+                #'TATNP',
                 'TRNFP',
+                'MOEXOG',
 ]
 
 while True:
@@ -171,6 +169,7 @@ plt.show()
 """
 cum_av_return = pd.DataFrame() # Dataframe for all CAAR stocks
 for oilstock in moexog_chips:
+    print("\n", oilstock, ": ")
     cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
     # Stock return
     SR = returns_calc(oilstock, risk_free, market)
@@ -178,26 +177,29 @@ for oilstock in moexog_chips:
     for sanction in sanction_dates:
         filtered_df = tau_df(sanction, SR, tau) # Only event window
         cum_return[sanction] = filtered_df['r_cum']
-    cum_return['CAAR']= cum_return.mean(axis=1) # Cumulative average abnormal return
-    calculate_conf_intervals(cum_return, 0.95) # CAAR asymptotic confidence interval
-    cum_av_return['CAAR_'+oilstock] = cum_return['CAAR']
+    cum_return['CAAR']= cum_return.mean(axis=1)*100 # Cumulative average abnormal return in percente
+    calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
+    cum_av_return['CAAR_'+oilstock] = cum_return['CAAR'].round(2)
     #cum_return = None
-    print(cum_return)
+    #print(cum_return)
 
     # CAAR plot
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(4, 3))
     plt.plot(cum_return.iloc[:,-3], label='Abnormal return', color='green')
     # Adding the confidence interval area
-    plt.fill_between(cum_return.index, cum_return.iloc[:,-2], cum_return.iloc[:,-1], color='lightblue', alpha=0.5, label='Confidence Interval')
+    plt.fill_between(cum_return.index, cum_return.iloc[:,-2], cum_return.iloc[:,-1], color='lightblue', alpha=0.4, label='Confidence Interval')
     plt.axvline(x=0, color='red', linestyle='--')
     plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
-    plt.title('Cumulative Average Abnormal Return: ' + oilstock)
-    plt.xlabel('Days')
-    plt.ylabel('Return')
+    plt.title(oilstock) #'Cumulative Average Abnormal Return: ' + 
+    plt.xlabel('Event window, days', fontsize=14)
+    plt.ylabel('Return, %', fontsize=14)
     plt.grid(True)
     plt.show()
 
+# Save the DataFrame with all CAARs to an Excel file
+cum_av_return.to_excel(f'caar_oilgas_{tau}.xlsx', index=True)
 
 print(cum_av_return)
 descr_stats = cum_av_return.iloc[-1].describe()
 print(descr_stats)
+#descr_stats.to_excel(f'caar_stat.xlsx', index=True)
