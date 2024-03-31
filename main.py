@@ -122,17 +122,17 @@ blue_chips = ['CHMF',
               ]
 
 moexog_chips = ['BANEP',
-                #'GAZP',
-                #'LKOH',
+                'GAZP',
+                'LKOH',
                 'NVTK',
                 'RNFT',
                 'ROSN',
                 'SNGS',
-                #'SNGSP',
-                #'TATN',
-                #'TATNP',
+                'SNGSP',
+                'TATN',
+                'TATNP',
                 'TRNFP',
-                'MOEXOG',
+                #'MOEXOG',
 ]
 
 while True:
@@ -181,7 +181,7 @@ for oilstock in moexog_chips:
     calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
     cum_av_return['CAAR_'+oilstock] = cum_return['CAAR'].round(2)
     #cum_return = None
-    #print(cum_return)
+    print(cum_return)
 
     # CAAR plot
     plt.figure(figsize=(4, 3))
