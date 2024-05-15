@@ -89,7 +89,7 @@ def calculate_conf_intervals(df, conf_level):
 
 
 f = "stock_data/"
-window_size = 250
+window_size = 60
 sanction_dates = ['2022-05-30',
                   '2022-06-03',
                   '2022-09-02',
@@ -173,7 +173,7 @@ for sanction in sanction_dates:
     cum_return = pd.DataFrame() # Dataframe for all CARs and particular date
     
 
-    for oilstock in blue_chips:
+    for oilstock in moexog_chips:
         # Stock return
         SR = returns_calc(oilstock, risk_free, market)
         filtered_df = tau_df(sanction, SR, tau) # Only event window
