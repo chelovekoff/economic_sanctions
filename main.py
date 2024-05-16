@@ -5,8 +5,15 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 
-def returns_calc(stock, risk_free, market):
-    
+def returns_calc(stock, risk_free, market, sanc_type):
+
+    if sanc_type == "EU":
+        prefix = "oil/"
+        sanction_dates = eu_oil_sanction_dates
+    elif sanc_type == "US":
+        prefix = "fin/"
+        sanction_dates = us_fin_sanction_dates
+
     # Calculation of the day risk-free rate:
     risk_free.columns = ['r_f']
     risk_free['r_f'] = risk_free['r_f']/100
@@ -21,12 +28,12 @@ def returns_calc(stock, risk_free, market):
 
     try:
         # for a single stock
-        stock = pd.read_excel(f+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
+        stock = pd.read_excel(f+prefix+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
         stock = stock.sort_values(by='Дата')
         stock['r_i'] = stock['Закрытие'].pct_change() # Factual stock return
     except:
         # for a sector index
-        stock = pd.read_excel(f+stock+'.xlsx', index_col=0, parse_dates=True)
+        stock = pd.read_excel(f+prefix+stock+'.xlsx', index_col=0, parse_dates=True)
         stock.columns = ['sector_index']
         stock = stock.sort_values(by='Дата')
         stock['r_i'] = stock['sector_index'].pct_change() # Factual stock return
@@ -57,7 +64,7 @@ def returns_calc(stock, risk_free, market):
     stock = stock.dropna(subset=['beta'])
     stock['r_e'] = stock['r_f'] + stock['beta'] * stock['rm_rf'] # Expected stock return
     stock['r_a'] = stock['r_i'] - stock ['r_e'] # Abnormal stock return
-    return stock
+    return stock, sanction_dates
 
 def tau_df(sanction_date, df, tau):
     important_date = pd.to_datetime(sanction_date)
@@ -74,7 +81,6 @@ def tau_df(sanction_date, df, tau):
 
 # Calcilating an asymptotic confidence interval for CAAR
 def calculate_conf_intervals(df, conf_level):
-    
     z_score = abs(stats.norm.ppf((1-conf_level)/2)) # Z-score for the conf.level
     n = len(df.columns) - 1 # Number of CAR values
     # Calculate the standard deviation for the first n columns for each row
@@ -84,57 +90,88 @@ def calculate_conf_intervals(df, conf_level):
     # Calculate the lower and upper confidence interval bounds
     df['CI_lower'] = df.iloc[:, -1] - margin_of_error
     df['CI_upper'] = df.iloc[:, -2] + margin_of_error
-    
     return df
 
-
 f = "stock_data/"
-window_size = 250
-sanction_dates = ['2022-05-30',
-                  '2022-06-03',
-                  '2022-09-02',
-                  '2022-10-06',
-                  '2022-12-05',
-                  '2023-02-04',
-                  '2023-06-23',#+PR
-                  '2023-12-18',
-                  #'2023-06-24' #PR
-                  ]
+window_size = 70
+eu_oil_sanction_dates = [
+    '2022-05-30',
+    '2022-06-03',
+    '2022-09-02',
+    '2022-10-06',
+    '2022-12-05',
+    '2023-02-04',
+    '2023-06-23',#+PR
+    '2023-12-18',
+    #'2023-06-24' #PR
+]
 seven_pacage = '2022-07-21' #The EU implements G7 commitments with its seventh sanctions package by banning imports of gold from Russia, clarifying and expanding on existing export controls, and sanctioning an additional 54 individuals and 10 entities.
 prigozhin = '2023-06-24'
 treasury_ban = '2023-11-02' #The US Treasury sanctions entities in China, Turkey, and the United Arab Emirates for sending high-priority dual use goods to Russia, as well as 7 Russian banks and other individuals and entities. The US State Department issues sanctions that affect over 90 entities for sanctions evasion and also target Russia’s future energy capabilities.
 
-blue_chips = ['CHMF',
-              'GAZP',
-              'GMKN',
-              'IRAO',
-              'LKOH',
-              'MGNT',
-              'MTSS',
-              'NVTK',
-              'PLZL',
-              'ROSN',
-              'RUAL',
-              'SBER',
-              'SNGS',
-              'TATN',
-              'YNDX'
-              ]
-
-moexog_chips = ['BANEP',
-                'GAZP',
-                'LKOH',
-                'NVTK',
-                'RNFT',
-                'ROSN',
-                'SNGS',
-                'SNGSP',
-                'TATN',
-                'TATNP',
-                'TRNFP',
-                #'MOEXOG',
+us_fin_sanction_dates = [
+    '2022-04-06',
+    '2022-05-08',
+    '2022-05-24',
+    '2022-06-27',
+    '2022-09-30',
+    '2022-12-15',
+    '2023-02-24',
+    '2023-05-19',
+    '2023-07-20',
+    '2023-09-14',
+    '2023-11-02',
+    '2023-12-22',
 ]
 
+blue_chips = [
+    'CHMF',
+    'GAZP',
+    'GMKN',
+    'IRAO',
+    'LKOH',
+    'MGNT',
+    'MTSS',
+    'NVTK',
+    'PLZL',
+    'ROSN',
+    'RUAL',
+    'SBER',
+    'SNGS',
+    'TATN',
+    'YNDX'
+]
+
+moexog_chips = [
+    'BANEP',
+    'GAZP',
+    'LKOH',
+    'NVTK',
+    'RNFT',
+    'ROSN',
+    'SNGS',
+    'SNGSP',
+    'TATN',
+    'TATNP',
+    'TRNFP',
+    #'MOEXOG', #index
+]
+
+moexfn_chips = [
+    'MOEX',
+    'TCSG',
+    'VTBR',
+    'SBER',
+    'CBOM',
+    'BSPB',
+    'RENI',
+    'SFIN',
+    'SBERP',
+    'SPBE',
+    #'MOEXFN', #index
+]
+
+# Input the required Event Window (tau):
 while True:
     try:
         tau = int(input("Input the 'tau' value: "))
@@ -142,6 +179,20 @@ while True:
     except ValueError:
         print("Please enter a valid integer.")
 #estimated_stock = input("input the stock for estimation: ")
+
+# Input the sanctions' sender
+while True:
+    try:
+        sanc_type = str(input("Input the sanctions' sender ('EU'/'US'): "))
+        break  # Exit the loop if successfully converted to an integer.
+    except ValueError:
+        print("Please enter a valid integer.")
+
+# Selection of the stocks sample:
+if sanc_type == "EU":
+    chips = moexog_chips
+elif sanc_type == "US":
+    chips = moexfn_chips
 
 # Risk-free rate: RUB Yield Curve 1Y
 risk_free = pd.read_excel(f+'rub-yield-curve-1y.xlsx', index_col=0, parse_dates=True)
@@ -168,18 +219,18 @@ plt.grid(True)
 plt.show()
 """
 cum_av_return = pd.DataFrame() # Dataframe for all CAAR stocks
-for oilstock in moexog_chips:
-    print("\n", oilstock, ": ")
+for onestock in chips:
+    print("\n", onestock, ": ")
     cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
     # Stock return
-    SR = returns_calc(oilstock, risk_free, market)
+    SR, sanction_dates = returns_calc(onestock, risk_free, market, sanc_type)
 
     for sanction in sanction_dates:
         filtered_df = tau_df(sanction, SR, tau) # Only event window
         cum_return[sanction] = filtered_df['r_cum']
     cum_return['CAAR']= cum_return.mean(axis=1)*100 # Cumulative average abnormal return in percente
     calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
-    cum_av_return['CAAR_'+oilstock] = cum_return['CAAR'].round(2)
+    cum_av_return['CAAR_'+onestock] = cum_return['CAAR'].round(2)
     #cum_return = None
     print(cum_return)
 
@@ -190,14 +241,14 @@ for oilstock in moexog_chips:
     plt.fill_between(cum_return.index, cum_return.iloc[:,-2], cum_return.iloc[:,-1], color='lightblue', alpha=0.4, label='Confidence Interval')
     plt.axvline(x=0, color='red', linestyle='--')
     plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
-    plt.title(oilstock) #'Cumulative Average Abnormal Return: ' + 
+    plt.title(onestock) #'Cumulative Average Abnormal Return: ' + 
     plt.xlabel('Event window, days', fontsize=14)
     plt.ylabel('Return, %', fontsize=14)
     plt.grid(True)
     plt.show()
 
 # Save the DataFrame with all CAARs to an Excel file
-cum_av_return.to_excel(f'caar_oilgas_{tau}.xlsx', index=True)
+cum_av_return.to_excel(f'caar_{sanc_type}_{tau}.xlsx', index=True)
 
 print(cum_av_return)
 descr_stats = cum_av_return.iloc[-1].describe()
