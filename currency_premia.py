@@ -4,7 +4,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import jarque_bera
 
-
+# Get USD/RUB exchange rate DF
+def get_exchange_rate (cbr):
+    cbr_data = pd.read_excel(f+cbr, index_col=0, parse_dates=True)
+    cbr_data.columns = ['cbr']
+    cbr_data = cbr_data.sort_values(by='Дата')
+    return cbr_data
 
 def currency_return (forward, spot, cbr):#, return_type
     try:
@@ -19,22 +24,22 @@ def currency_return (forward, spot, cbr):#, return_type
         spot_data = spot_data.sort_values(by='Дата')
 
         # for a CBR's USD/RUB rate
-        cbr_data = pd.read_excel(f+cbr, index_col=0, parse_dates=True)
-        cbr_data.columns = ['cbr']
-        cbr_data = cbr_data.sort_values(by='Дата')
+        cbr_data = get_exchange_rate (cbr)
         cbr_data['ln_cbr_return'] = np.log(cbr_data.cbr) - np.log(cbr_data.cbr.shift(1))
-        cbr_data['mean_ln_cbr_return'] = cbr_data['ln_cbr_return'].rolling(window=15).mean()
-        print("the first 16 rows:\n", cbr_data.mean_ln_cbr_return.head(16))
+        cbr_data['mean_ln_cbr_return'] = cbr_data['ln_cbr_return'].rolling(window=250).mean()
+        rub_return =  pd.DataFrame(cbr_data['mean_ln_cbr_return'])
+        rub_return = rub_return.dropna(subset=['mean_ln_cbr_return'])
+
+        #print("the first 16 rows:\n", cbr_data.mean_ln_cbr_return.head(16))
 
         currency_data = pd.merge(forward_data, spot_data, left_index=True, right_index=True, how='left')
         currency_data["expected_change"] = currency_data["fwd"]/currency_data["spt"]-1
         currency_data["ln_expected_change"] = np.log(currency_data["fwd"]) - np.log(currency_data["spt"])
         currency_data = pd.merge(currency_data, cbr_data['mean_ln_cbr_return'], left_index=True, right_index=True, how='left')
 
-        print(forward_data.tail(), "\n", spot_data.tail())
-        print(currency_data)
-        print 
-        return currency_data
+        #print(forward_data.tail(), "\n", spot_data.tail())
+        print(rub_return)
+        return currency_data, rub_return
     except Exception as e:
         print("Error: ", str(e))
 
@@ -53,7 +58,7 @@ spot = "средневзвешенный-курс-usdrub_tom.xlsx"
 cbr = "usd_rub-(банк-россии).xlsx"
 
 
-currency_data = currency_return(forward, spot, cbr)
+currency_data, ___ = currency_return(forward, spot, cbr)
 print("Final data:\n", currency_data.head())
 
 # Expected Exchange Rate Return

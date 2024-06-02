@@ -4,8 +4,51 @@ from scipy import stats
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
+from currency_premia import currency_return, get_exchange_rate
 
-def returns_calc(stock, risk_free, market, sanc_type):
+def return_rfrm(isRuble):
+    
+    # Risk-free rate: RUB Yield Curve 1Y
+    risk_free = pd.read_excel(f+'rub-yield-curve-1y.xlsx', index_col=0, parse_dates=True)
+    risk_free = risk_free.sort_values(by='Дата')
+
+    # Calculation of the day risk-free rate:
+    risk_free.columns = ['r_f']
+    risk_free['r_f'] = risk_free['r_f']/100
+    risk_free = (1 + risk_free) ** (1/365) - 1
+    print("=======\nRF:\n", risk_free.head(30))
+    
+    if isRuble:
+        # Market return: IMOEX
+        print("IMOEX in use")
+        market = pd.read_excel(f+'imoex.xlsx', index_col=0, parse_dates=True)
+    else:
+        # Market return: RTSI
+        market = pd.read_excel(f+'rtsi.xlsx', index_col=0, parse_dates=True)
+        print("RTSI in use")
+        # Adjusting ruble risk-fre return to the expected change in the exchange rate
+        forward = "usd_rub-o_n-fx-(outright)-mid.xlsx"
+        spot = "средневзвешенный-курс-usdrub_tom.xlsx"
+        cbr = "usd_rub-(банк-россии).xlsx"
+        ___, rub_return = currency_return (forward, spot, cbr)
+        risk_free = pd.merge(risk_free, rub_return['mean_ln_cbr_return'], left_index=True, right_index=True, how='left')
+        risk_free.ffill(inplace=True)
+        risk_free = risk_free.dropna(subset=['r_f'])
+        risk_free['r_f_adj'] = risk_free['r_f'] - risk_free['mean_ln_cbr_return']
+        print ("all 3 r-f rates:\n",risk_free.head(30))
+        risk_free['r_f'] = risk_free['r_f_adj']
+
+    #print (risk_free.head())
+
+    # Calclulation of the day market return:
+    market = market.sort_values(by='Дата')
+    market.columns = ['m']
+    market['r_m'] = market['m'].pct_change()  
+    #print("=======\nMR:\n", market.head())
+    return risk_free, market
+
+
+def returns_calc(stock, risk_free, market, sanc_type, isRuble):
 
     if sanc_type == "EU":
         prefix = "oil/"
@@ -14,23 +57,23 @@ def returns_calc(stock, risk_free, market, sanc_type):
         prefix = "fin/"
         sanction_dates = us_fin_sanction_dates
 
-    # Calculation of the day risk-free rate:
-    risk_free.columns = ['r_f']
-    risk_free['r_f'] = risk_free['r_f']/100
-    risk_free = (1 + risk_free) ** (1/365) - 1
-    #print("=======\nRF:\n", risk_free.head())
-
-    # Calclulation of the day market return:
-    market = market.sort_values(by='Дата')
-    market.columns = ['m']
-    market['r_m'] = market['m'].pct_change()  
-    #print("=======\nMR:\n", market.head())
 
     try:
         # for a single stock
         stock = pd.read_excel(f+prefix+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
         stock = stock.sort_values(by='Дата')
-        stock['r_i'] = stock['Закрытие'].pct_change() # Factual stock return
+        if isRuble == False:
+            cbr = "usd_rub-(банк-россии).xlsx"
+            cbr_data = get_exchange_rate(cbr)
+            stock = pd.merge(stock, cbr_data, left_index=True, right_index=True, how='left')
+            stock.ffill(inplace=True) #Add the previois values for NaN currency rate
+            stock.bfill(inplace=True) #than - forward value (for the first three dates)
+            stock = stock.dropna(subset=['Закрытие'])
+            stock['close_p'] = stock['Закрытие']/stock['cbr']
+            print(stock.head(10))
+        else:
+            stock['close_p'] = stock['Закрытие']
+        stock['r_i'] = stock['close_p'].pct_change() # Factual stock return
     except:
         # for a sector index
         stock = pd.read_excel(f+prefix+stock+'.xlsx', index_col=0, parse_dates=True)
@@ -44,6 +87,8 @@ def returns_calc(stock, risk_free, market, sanc_type):
     #print(f"=======\n{stock}:\n", stock.head(10))
     #print(SIBN.isna().sum()) #How many NaN has each column
     stock = stock.dropna(subset=['r_i'])
+    print(stock.isna().sum())
+    print(stock.head(300))
 
     # Calculate rolling beta
     def rolling_beta(ri_rf, rm_rf, window_size):
@@ -93,7 +138,7 @@ def calculate_conf_intervals(df, conf_level):
     return df
 
 f = "stock_data/"
-window_size = 70
+window_size = 60
 eu_oil_sanction_dates = [
     '2022-05-30',
     '2022-06-03',
@@ -183,23 +228,30 @@ while True:
 # Input the sanctions' sender
 while True:
     try:
-        sanc_type = str(input("Input the sanctions' sender ('EU'/'US'): "))
-        break  # Exit the loop if successfully converted to an integer.
+        sanc_type = str(input("Input the sanctions' sender ('EU'/'US'): ")).strip().upper()
+        if sanc_type in ['EU', 'US']:
+            # Selection of the stocks sample:
+            if sanc_type == "EU":
+                chips = moexog_chips
+            elif sanc_type == "US":
+                chips = moexfn_chips
+            break
     except ValueError:
         print("Please enter a valid integer.")
 
-# Selection of the stocks sample:
-if sanc_type == "EU":
-    chips = moexog_chips
-elif sanc_type == "US":
-    chips = moexfn_chips
+# Input the currency for returns in CAPM
+while True:
+    cur_type = input("Input the currency for returns in CAPM ('RUB'/'USD'): ").strip().upper()
+    if cur_type in ['RUB', 'USD']:
+        if cur_type == "RUB":
+            isRuble = True
+        elif cur_type == "USD":
+            isRuble = False
+        break
+    else:
+        print("Please enter a valid currency ('RUB' or 'USD').")
 
-# Risk-free rate: RUB Yield Curve 1Y
-risk_free = pd.read_excel(f+'rub-yield-curve-1y.xlsx', index_col=0, parse_dates=True)
-
-# Market return: IMOEX
-market = pd.read_excel(f+'IMOEX.xlsx', index_col=0, parse_dates=True)
-
+risk_free, market = return_rfrm(isRuble)
 """
 #Stock CAR
 SR_tau = tau_df(sanction_dates[5], SR, tau)
@@ -223,7 +275,7 @@ for onestock in chips:
     print("\n", onestock, ": ")
     cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
     # Stock return
-    SR, sanction_dates = returns_calc(onestock, risk_free, market, sanc_type)
+    SR, sanction_dates = returns_calc(onestock, risk_free, market, sanc_type, isRuble)
 
     for sanction in sanction_dates:
         filtered_df = tau_df(sanction, SR, tau) # Only event window
@@ -234,6 +286,7 @@ for onestock in chips:
     #cum_return = None
     print(cum_return)
 
+    '''
     # CAAR plot
     plt.figure(figsize=(4, 3))
     plt.plot(cum_return.iloc[:,-3], label='Abnormal return', color='green')
@@ -246,6 +299,7 @@ for onestock in chips:
     plt.ylabel('Return, %', fontsize=14)
     plt.grid(True)
     plt.show()
+    '''
 
 # Save the DataFrame with all CAARs to an Excel file
 cum_av_return.to_excel(f'caar_{sanc_type}_{tau}.xlsx', index=True)
