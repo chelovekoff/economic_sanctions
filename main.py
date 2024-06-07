@@ -43,7 +43,7 @@ def return_rfrm(isRuble):
     # Calclulation of the day market return:
     market = market.sort_values(by='Дата')
     market.columns = ['m']
-    market['r_m'] = market['m'].pct_change()  
+    market['r_m'] = np.log(market.m) - np.log(market.m.shift(1)) # market log return
     #print("=======\nMR:\n", market.head())
     return risk_free, market
 
@@ -73,13 +73,13 @@ def returns_calc(stock, risk_free, market, sanc_type, isRuble):
             print(stock.head(10))
         else:
             stock['close_p'] = stock['Закрытие']
-        stock['r_i'] = stock['close_p'].pct_change() # Factual stock return
+        stock['r_i'] = np.log(stock.close_p) - np.log(stock.close_p.shift(1)) # Factual stock log return
     except:
         # for a sector index
         stock = pd.read_excel(f+prefix+stock+'.xlsx', index_col=0, parse_dates=True)
         stock.columns = ['sector_index']
         stock = stock.sort_values(by='Дата')
-        stock['r_i'] = stock['sector_index'].pct_change() # Factual stock return
+        stock['r_i'] = np.log(stock.sector_index) - np.log(stock.sector_index.shift(1)) # Factual stock log return
     stock = pd.merge(stock, risk_free, left_index=True, right_index=True, how='left')
     stock = pd.merge(stock, market['r_m'], left_index=True, right_index=True, how='left')
     stock['ri_rf'] = stock['r_i']- stock['r_f'] # Excess risk-free stock return
@@ -286,7 +286,7 @@ for onestock in chips:
     #cum_return = None
     print(cum_return)
 
-    '''
+    
     # CAAR plot
     plt.figure(figsize=(4, 3))
     plt.plot(cum_return.iloc[:,-3], label='Abnormal return', color='green')
@@ -299,7 +299,7 @@ for onestock in chips:
     plt.ylabel('Return, %', fontsize=14)
     plt.grid(True)
     plt.show()
-    '''
+    
 
 # Save the DataFrame with all CAARs to an Excel file
 cum_av_return.to_excel(f'caar_{sanc_type}_{tau}.xlsx', index=True)
