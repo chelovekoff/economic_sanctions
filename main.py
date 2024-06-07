@@ -21,7 +21,7 @@ def returns_calc(stock, risk_free, market):
 
     try:
         # for a single stock
-        stock = pd.read_excel(f+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
+        stock = pd.read_excel(f+'oil/'+stock+'.xlsx', header=1, index_col=0, parse_dates=True, usecols=['Дата', 'Закрытие'])
         stock = stock.sort_values(by='Дата')
         stock['r_i'] = stock['Закрытие'].pct_change() # Factual stock return
     except:
