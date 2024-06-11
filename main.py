@@ -302,7 +302,7 @@ for onestock in chips:
     
 
 # Save the DataFrame with all CAARs to an Excel file
-cum_av_return.to_excel(f'caar_{sanc_type}_{tau}.xlsx', index=True)
+cum_av_return.to_excel(f'caar_{sanc_type}_{tau}_{cur_type}.xlsx', index=True)
 
 print(cum_av_return)
 descr_stats = cum_av_return.iloc[-1].describe()

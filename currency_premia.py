@@ -62,28 +62,29 @@ currency_data, ___ = currency_return(forward, spot, cbr)
 print("Final data:\n", currency_data.head())
 
 # Expected Exchange Rate Return
-plt.figure(figsize=(4, 3))
-plt.plot(currency_data["ln_expected_change"], label='ln_expected_change', color='green')
-plt.plot(currency_data['mean_ln_cbr_return'], label='ln_expected_change', color='blue')
+plt.figure(figsize=(12, 4))
+plt.plot(currency_data["ln_expected_change"], color='green', label='CIRP concepte')
+plt.plot(currency_data['mean_ln_cbr_return'], color='blue', label='CBR Exchange Rate')
 #plt.axhline(x=0, color='red', linestyle='--')
 plt.title('') #'Cumulative Average Abnormal Return: ' + 
-plt.xlabel('Date', fontsize=14)
+plt.xlabel('') #'Date', fontsize=14
 plt.ylabel('Return', fontsize=14)
 plt.grid(True)
+plt.legend(loc='lower right')
 plt.show()
 
 # Distribution of the Expected Exchange Rate Return
-plt.figure(figsize=(14, 7))
+plt.figure(figsize=(12, 6))
 # Plot distribution of 'ln_expected_change'
 plt.subplot(1, 2, 1)
-sns.histplot(currency_data["ln_expected_change"], bins=30, kde=True, color='blue')
+sns.histplot(currency_data["ln_expected_change"], bins=15, kde=True, color='blue')
 plt.title('Distribution of the Expected Return (the CIRP)')
 plt.xlabel('Expected Return')
 plt.ylabel('Frequency')
 plt.grid(True)
 # Plot distribution of 'mean_ln_cbr_return'
 plt.subplot(1, 2, 2)
-sns.histplot(currency_data['mean_ln_cbr_return'], bins=30, kde=True, color='green')
+sns.histplot(currency_data['mean_ln_cbr_return'], bins=15, kde=True, color='green')
 plt.title('Distribution of the Expected Return (CBR historical data)')
 plt.xlabel('Expected Return')
 plt.ylabel('Frequency')
