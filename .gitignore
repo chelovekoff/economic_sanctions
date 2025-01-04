@@ -6,6 +6,7 @@ logs.txt
 *.json
 #*.xls
 #*.xlsx
+test.py
 
 .vscode
 
