@@ -52,11 +52,8 @@ def returns_calc(stock, risk_free, market, sanc_type, isRuble):
 
     if sanc_type == "EU":
         prefix = "oil/"
-        sanction_dates = eu_oil_sanction_dates
     elif sanc_type == "US":
         prefix = "fin/"
-        sanction_dates = us_fin_sanction_dates
-
 
     try:
         # for a single stock
@@ -109,7 +106,7 @@ def returns_calc(stock, risk_free, market, sanc_type, isRuble):
     stock = stock.dropna(subset=['beta'])
     stock['r_e'] = stock['r_f'] + stock['beta'] * stock['rm_rf'] # Expected stock return
     stock['r_a'] = stock['r_i'] - stock ['r_e'] # Abnormal stock return
-    return stock, sanction_dates
+    return stock
 
 def tau_df(sanction_date, df, tau):
     important_date = pd.to_datetime(sanction_date)
@@ -136,6 +133,21 @@ def calculate_conf_intervals(df, conf_level):
     df['CI_lower'] = df.iloc[:, -1] - margin_of_error
     df['CI_upper'] = df.iloc[:, -2] + margin_of_error
     return df
+
+# CAAR plot
+def caar_plot(df, item):
+    plt.figure(figsize=(4, 3))
+    plt.plot(df.iloc[:,-3], label='Abnormal return', color='green')
+    # Adding the confidence interval area
+    plt.fill_between(df.index, df.iloc[:,-2], df.iloc[:,-1], color='lightblue', alpha=0.4, label='Confidence Interval')
+    plt.axvline(x=0, color='red', linestyle='--')
+    plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
+    plt.title(item) #'Cumulative Average Abnormal Return: ' + 
+    plt.xlabel('Event window, days', fontsize=14)
+    plt.ylabel('Return, %', fontsize=14)
+    plt.grid(True)
+    plt.show()
+
 
 f = "stock_data/"
 window_size = 60
@@ -233,11 +245,13 @@ while True:
             # Selection of the stocks sample:
             if sanc_type == "EU":
                 chips = moexog_chips
+                sanction_dates = eu_oil_sanction_dates
             elif sanc_type == "US":
                 chips = moexfn_chips
+                sanction_dates = us_fin_sanction_dates
             break
     except ValueError:
-        print("Please enter a valid integer.")
+        print("Please enter a valid sender EU or US.")
 
 # Input the currency for returns in CAPM
 while True:
@@ -250,6 +264,16 @@ while True:
         break
     else:
         print("Please enter a valid currency ('RUB' or 'USD').")
+
+# Input the method of sanction assessment
+while True:
+    try:
+        sanc_method = str(input("Input the method of sanction assessment ('U'/'M'): ")).strip().upper()
+        if sanc_method in ['U', 'M']:
+            break
+    except ValueError:
+        print("Please enter a valid method (U/M).")
+
 
 risk_free, market = return_rfrm(isRuble)
 """
@@ -270,39 +294,50 @@ plt.grid(True)
 #plt.gca().xaxis.set_major_formatter(DateFormatter('%m-%d'))
 plt.show()
 """
+
 cum_av_return = pd.DataFrame() # Dataframe for all CAAR stocks
-for onestock in chips:
-    print("\n", onestock, ": ")
-    cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
-    # Stock return
-    SR, sanction_dates = returns_calc(onestock, risk_free, market, sanc_type, isRuble)
 
+if sanc_method == 'U':
+    #Univariate Analysis
+    for onestock in chips:
+        print("\n", onestock, ": ")
+        cum_return = pd.DataFrame() # Dataframe for all CARs and particular stock
+        # Stock return
+        SR = returns_calc(onestock, risk_free, market, sanc_type, isRuble)
+
+        for sanction in sanction_dates:
+            print(sanction)
+            filtered_df = tau_df(sanction, SR, tau) # Only event window
+            cum_return[sanction] = filtered_df['r_cum']
+        cum_return['CAAR']= cum_return.mean(axis=1)*100 # Cumulative average abnormal return in percente
+        calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
+        cum_av_return['CAAR_'+onestock] = cum_return['CAAR'].round(2)
+        #cum_return = None
+        print(cum_return)
+        # CAAR plot
+        caar_plot(cum_return, onestock)
+elif sanc_method == 'M':
+    #Multivariate Analysis
     for sanction in sanction_dates:
-        filtered_df = tau_df(sanction, SR, tau) # Only event window
-        cum_return[sanction] = filtered_df['r_cum']
-    cum_return['CAAR']= cum_return.mean(axis=1)*100 # Cumulative average abnormal return in percente
-    calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
-    cum_av_return['CAAR_'+onestock] = cum_return['CAAR'].round(2)
-    #cum_return = None
-    print(cum_return)
-
-    
-    # CAAR plot
-    plt.figure(figsize=(4, 3))
-    plt.plot(cum_return.iloc[:,-3], label='Abnormal return', color='green')
-    # Adding the confidence interval area
-    plt.fill_between(cum_return.index, cum_return.iloc[:,-2], cum_return.iloc[:,-1], color='lightblue', alpha=0.4, label='Confidence Interval')
-    plt.axvline(x=0, color='red', linestyle='--')
-    plt.axhline(y=0, color='black', linestyle='-', linewidth=1)
-    plt.title(onestock) #'Cumulative Average Abnormal Return: ' + 
-    plt.xlabel('Event window, days', fontsize=14)
-    plt.ylabel('Return, %', fontsize=14)
-    plt.grid(True)
-    plt.show()
+        print("\n", sanction, ": ")
+        cum_return = pd.DataFrame() # Dataframe for all CARs and particular date
+        
+        for stock in chips:
+            # Stock return
+            SR = returns_calc(stock, risk_free, market, sanc_type, isRuble)
+            filtered_df = tau_df(sanction, SR, tau) # Only event window
+            cum_return[stock] = filtered_df['r_cum']
+        cum_return['CAAR']= cum_return.mean(axis=1)*100 # Cumulative average abnormal return in percente
+        calculate_conf_intervals(cum_return, 0.9) # CAAR asymptotic confidence interval
+        cum_av_return['CAAR_'+sanction] = cum_return['CAAR'].round(2)
+        #cum_return = None
+        print(cum_return)
+        # CAAR plot
+        caar_plot(cum_return, sanction)
     
 
 # Save the DataFrame with all CAARs to an Excel file
-cum_av_return.to_excel(f'caar_{sanc_type}_{tau}_{cur_type}.xlsx', index=True)
+cum_av_return.to_excel(f'{sanc_method}_caar_{sanc_type}_{tau}_{cur_type}.xlsx', index=True)
 
 print(cum_av_return)
 descr_stats = cum_av_return.iloc[-1].describe()
