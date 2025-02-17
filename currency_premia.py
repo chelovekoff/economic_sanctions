@@ -43,6 +43,19 @@ def currency_return (forward, spot, cbr):#, return_type
     except Exception as e:
         print("Error: ", str(e))
 
+def excange_return(cbr):
+    '''Gttting USD/RUB currency log-return'''
+    try:
+        # for a CBR's USD/RUB rate
+        cbr_data = get_exchange_rate (cbr)
+        cbr_data['ln_cbr_return'] = np.log(cbr_data.cbr) - np.log(cbr_data.cbr.shift(1))
+        cbr_return = cbr_data['ln_cbr_return']
+        cbr_return['usdrub_return'] = cbr_return.dropna()
+        return cbr_return
+
+    except Exception as e:
+        print("Error: ", str(e))
+
 
 
 f = "stock_data/"
@@ -56,7 +69,6 @@ One month: usd_rub-1m-fx-(outright)-mid
 One year: usd_rub-1y-fx-(outright)-mid'''
 spot = "средневзвешенный-курс-usdrub_tom.xlsx"
 cbr = "usd_rub-(банк-россии).xlsx"
-
 
 currency_data, ___ = currency_return(forward, spot, cbr)
 print("Final data:\n", currency_data.head())
