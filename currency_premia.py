@@ -116,6 +116,7 @@ print(descr_stats_cirp, "\n", descr_stats_cbr)
 
 def get_stats(series):
     """Calculate descriptive statistics and Jarque-Bera test for a given series."""
+    """JB's p-value=0 ->  variable does not appear to be normally distributed."""
     descr_stats = series.describe()
     jb_test = jarque_bera(series)
     return descr_stats, jb_test
