@@ -5,6 +5,7 @@ from arch.univariate import GARCH, ConstantMean
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 import seaborn as sns
+from arch.unitroot import ADF, PhillipsPerron
 from scipy.stats import jarque_bera
 
 
@@ -106,16 +107,32 @@ plt.show()
 
 # Descriptive statistics of returns:
 def get_stats(series):
-    """Calculate descriptive statistics and Jarque-Bera test for a given series."""
+    """Calculate descriptive statistics, ADF and PP tests, and Jarque-Bera test for a given series."""
+    """JB's p-value=0 ->  variable does not appear to be normally distributed."""
     descr_stats = series.describe().round(3)
+    print(type(descr_stats))
     jb_stats = []
+    adf = []
+    pp = []
     for column in series:
-        jb_test = jarque_bera(series[column])
-        jb_stats.append(jb_test)
-    print(jb_stats)
-    jb_df = pd.DataFrame({'JB':jb_stats})
-    df_stats = pd.concat([descr_stats, jb_df.T], ignore_index=True)
-    return df_stats
+        jb_test = jarque_bera(series[column]) # JB test
+        jb_stats.append(f'{round(jb_test.statistic, 3)} (p-value {round(jb_test.pvalue, 3)})')
+        adf_test = ADF(series[column]) # ADF
+        adf.append(f'{round(adf_test.stat, 3)} (p-value {round(adf_test.pvalue, 3)})')
+        pp_test = PhillipsPerron(series[column]) # PP
+        pp.append(f'{round(pp_test.stat, 3)} (p-value {round(pp_test.pvalue,3)})')
+    print(len(jb_stats), len(adf), len(pp))
+
+    timeseries_stats_df = pd.DataFrame({
+        'JB' : jb_stats,
+        'ADF': adf,
+        'PP': pp
+        })
+    timeseries_stats_df = timeseries_stats_df.T
+    timeseries_stats_df.columns = descr_stats.columns.tolist()
+    descr_stats = pd.concat([descr_stats, timeseries_stats_df], ignore_index=False)
+
+    return descr_stats
 
 # Get statistics for both series
 df_stats = get_stats(df)
