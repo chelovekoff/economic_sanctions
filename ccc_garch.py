@@ -73,9 +73,6 @@ r_f = 1*((risk_free.r_f) - (risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_f
 r_f.name = 'r_f'
 r_f = r_f.dropna()
 
-#r_f.plot()
-#plt.show()
-
 
 #Market data
 market = pd.read_excel(f+'oil/MOEXOG.xlsx', index_col=0, parse_dates=True) #rtsi, imoex, eur_usd-(fx)_02, usd_cad-(fx)_02, oil/MOEXOG
@@ -92,6 +89,8 @@ us_market = pd.read_excel(f+sp_name, index_col=0, parse_dates=True)
 us_market = us_market.sort_values(by='Дата')
 us_market.columns = ['m']
 us_market['r_sp500'] = 100*(np.log(us_market.m) - np.log(us_market.m.shift(1))) #(us_market.m.pct_change()) # market log return
+
+# Realized volatility 
 #us_market['r_sp500'] = us_market['r_sp500']**2
 
 #Assamption that a lag could be presented between MOEX and SP500:
@@ -110,11 +109,12 @@ df = pd.merge(market['r_m'], r_f, left_index=True, right_index=True, how='left')
 df = pd.merge(df, cur_r, left_index=True, right_index=True, how='left')
 df = df.dropna()
 
-year = '2021'
+year = '2020'
 to_year = str(int(year) + 1)
 df = df[(df.index>=f"{year}-01-01") & (df.index<=f"{to_year}-01-01")]
 
-# Distribution of the Realized Market Return
+
+#----------- Distribution of the Realized Market Return---------------
 plt.figure(figsize=(8, 6))
 # Plot distribution of 'ln_expected_change'
 #plt.subplot(1, 2, 1)
@@ -169,8 +169,8 @@ plt.legend(loc='upper right')
 plt.show()
 '''
 
-print(df.head())
-print(df.tail())
+print(df.head(2))
+print(df.tail(2))
 
 
 # Correct Pandas syntax to select multiple columns
@@ -179,6 +179,7 @@ returns = df[['r_m', 'r_f', 'r_cur']]
 # Step 1: Fit VAR(1) Model
 var_model = VAR(returns)
 var_result = var_model.fit(1)  # VAR(1)
+print("================================VAR================================")
 print(var_result.summary())
 
 # Extract residuals from VAR model
@@ -186,11 +187,13 @@ residuals = var_result.resid
 
 # Step 2: Fit GARCH(1,1) models separately for each return series
 garch_models = {}
-for col in residuals.columns:
+for col in returns.columns:
     garch = ConstantMean(residuals[col])
-    garch.volatility = GARCH(1, 1)  # GARCH(1,1) process
+    garch.volatility = GARCH(p=1, q=1)  # GARCH(1,1) process, for GJR-GARCH include: o=1
     garch_models[col] = garch.fit(disp="off")
-    print(f"\nGARCH(1,1) Model Summary for {col}:\n", garch_models[col].summary())
+    print(f"================================GARCH ({col})================================\n",
+          f"\nGARCH(1,1) Model Summary for {col}:\n",
+          garch_models[col].summary())
 
 # Step 3: Compute Conditional Volatilities
 h_1 = garch_models['r_m'].conditional_volatility
@@ -201,22 +204,21 @@ h_3 = garch_models['r_cur'].conditional_volatility
 condit_volatility = pd.merge(h_1, h_2, left_index=True, right_index=True, how='left')
 condit_volatility = pd.merge(condit_volatility, h_3, left_index=True, right_index=True, how='left')
 condit_volatility.columns = returns.columns.tolist()
-print("Conditional volatilities DF:\n", condit_volatility.head())
+print("Conditional volatilities DF:\n", condit_volatility.head(3))
+
 
 #==================Conditional volatilities==================
 plt.figure(figsize=(8, 5))
 for col in condit_volatility.columns:
     plt.plot(condit_volatility.index, condit_volatility[col], label=col)
-#plt.axvline(x=0, color='grey', linestyle='--')
-#plt.axhline(y=0, color='grey', linestyle='-', linewidth=1)
-plt.title(f'Conditional Volatilities, {year}')
+plt.title(f'Conditional Volatilities, {year}', fontsize=14)
 plt.xlabel("", fontsize=10) #year
 plt.ylabel('Volatility, b.p.', fontsize=10)
 plt.grid(True)
 add_sanction_line(sanctions, condit_volatility)
 # Add custom red dotted line (not actually plotted)
 custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-plt.legend(loc='lower left') #upper left
+plt.legend(loc='upper right', fontsize=14, framealpha=0.5) #upper lower left
 # Get the current axis
 ax = plt.gca()
 # Set x-axis ticks to three times per month at valid trading days
@@ -229,39 +231,29 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-'''
-# Assuming your DataFrame has a DateTime index
-fig, ax = plt.subplots()
-# Plot your time-series DataFrame
-ax.plot(df.index, df['your_column'])
-# Set major ticks every week
-ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MONDAY))  # Adjust as needed
-# Format the ticks as 'Mar.27'
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%b.%d'))
-# Rotate labels for better readability
-plt.xticks(rotation=45)
-'''
 
 # Step 4: Compute Constant Conditional Correlation
-rho_12 = pearsonr(residuals['r_m'], residuals['r_cur'])[0]
+rho_12 = pearsonr(residuals['r_m'], residuals['r_f'])[0] #for h_1 and h_2
+rho_13 = pearsonr(residuals['r_m'], residuals['r_cur'])[0] #for h_1 and h_3
+rho_23 = pearsonr(residuals['r_f'], residuals['r_cur'])[0] #for h_2 and h_3
 
 # Step 5: Compute Conditional Covariances
 cond_covariances = rho_12 * h_1 * h_2
 cond_covariances.index.name = "Date"
 cond_cov_name = f'{returns.columns[0]} vs {returns.columns[1]}'
 cond_covariances.name = cond_cov_name
-print(type(cond_covariances))
-
 
 # Display results
 print("\nConstant Conditional Correlation (ρ_12):", rho_12)
-print("\nFirst 5 Conditional Covariance Values:\n", cond_covariances.tail(3))
+print("\nFirst 3 Conditional Covariance Values:\n", cond_covariances.tail(3))
+
+
 
 #================================Conditional Covariance Plot setup================================
 # Plot setup
 plt.figure(figsize=(8, 5))
 sns.lineplot(x=cond_covariances.index, y=cond_covariances, label=f"Conditional Covariance", color="blue")
-plt.title(f'Conditional Covariance, {cond_cov_name}, {year}')
+plt.title(f'Conditional Covariance, {cond_cov_name}, {year}', fontsize=14)
 # Formatting
 plt.xlabel("")#Date
 plt.ylabel("")# Covariance, b.p.
@@ -269,7 +261,7 @@ plt.xticks(rotation=45)
 plt.grid(True)
 add_sanction_line(sanctions, cond_covariances)
 custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-plt.legend(loc='lower left') #upper right
+plt.legend(loc='upper left', fontsize=14) #upper right lower left
 ax = plt.gca()
 # Set x-axis ticks to three times per month at valid trading days
 ax.xaxis.set_major_locator(mdates.MonthLocator())
