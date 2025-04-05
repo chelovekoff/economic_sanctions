@@ -8,27 +8,19 @@ import matplotlib.dates as mdates
 import seaborn as sns
 from arch.unitroot import ADF, PhillipsPerron
 from scipy.stats import jarque_bera
+from garch_plot import distr_plot, cond_volatility_plot, cond_covariance_plot
 
 
-
-def obtain_rf(filename):
-    # Risk-free rate: RUB Yield Curve 1Y
-    risk_free = pd.read_excel(f+filename, index_col=0, parse_dates=True)
-    risk_free = risk_free.sort_values(by='Дата')
-
-    # Calculation of the day risk-free rate:
-    risk_free.columns = ['r_f']
-    #risk_free['r_f'] = risk_free['r_f']/100
-    #risk_free = 100*((1 + risk_free) ** (1/12) - 1) #Monthly risk-free rate, in % #1/365 - daily
-    #print("=======\nRF:\n", risk_free.head(3))
-    #risk_free.plot()
-    #plt.show()
-
-    return risk_free
+# Input the year:
+while True:
+    try:
+        year = int(input("Input the year of the calculation start (in the 'yyyy' format): "))
+        break  # Exit the loop if successfully converted to an integer.
+    except ValueError:
+        print("Please enter a valid integer.")
+to_year = str(int(year) + 1)
 
 f = "stock_data/"
-
-# Load and preprocess data
 
 sanction_list = [
     '2022-06-03', #6th package - oil import, SWIFT
@@ -39,56 +31,32 @@ sanction_list = [
 ]
 sanctions = pd.to_datetime(sanction_list)
 
-def add_sanction_line(sanctions, df):
-    '''Add highlighted regions'''
-    for date in sanctions:
-        date = pd.Timestamp(date)  # Ensure it's a Timestamp
-        for offset in range(3):  # Check date, date+1, date+2
-            shifted_date = date + pd.Timedelta(days=offset)
-            if shifted_date in df.index:
-                idx = df.index.get_loc(shifted_date)  # Get index
-                start_idx = max(0, idx - 5)
-                end_idx = min(len(df) - 1, idx + 5)
-
-                start_date = df.index[start_idx]
-                end_date = df.index[end_idx]
-
-                plt.axvspan(start_date, end_date, color="gray", alpha=0.3)
-                plt.axvline(x=shifted_date, color='red', linewidth=2.5, linestyle='--')
-                break  # Stop checking once a valid date is found
-
-            '''# Annotate specific date
-            value_at_date = df.loc[date, "cond_cov"]
-            plt.text(date, value_at_date, f"{date.strftime('%Y-%m-%d')}", 
-                    fontsize=10, color="red", ha="center", va="bottom", fontweight="bold")'''
-
-f = "stock_data/"
-
 # Risk free rate:
-filename_rf = 'rub-yield-curve-1y.xlsx' #rub-yield-curve-1y,  s-p-500, rgbitr-ru000a0jqv87
+filename_rf = 'rgbitr-ru000a0jqv87.xlsx' #rub-yield-curve-1y,  s-p-500, rgbitr-ru000a0jqv87
 risk_free = pd.read_excel(f+filename_rf, index_col=0, parse_dates=True)
 risk_free = risk_free.sort_values(by='Дата')
 risk_free.columns = ['r_f']
-r_f = 1*((risk_free.r_f) - (risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_free['r_f'].shift(1))
+#First Difference:
+#r_f = 1*((risk_free.r_f) - (risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_free['r_f'].shift(1))
+#Log-Return:
+r_f = 100*(np.log(risk_free.r_f) - np.log(risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_free['r_f'].shift(1))
 r_f.name = 'r_f'
 r_f = r_f.dropna()
 
-
 #Market data
-market = pd.read_excel(f+'oil/MOEXOG.xlsx', index_col=0, parse_dates=True) #rtsi, imoex, eur_usd-(fx)_02, usd_cad-(fx)_02, oil/MOEXOG
+market = pd.read_excel(f+'rtsi.xlsx', index_col=0, parse_dates=True) #rtsi, ртс-ru000a0jpeb3, imoex, eur_usd-(fx)_02, usd_cad-(fx)_02, oil/MOEXOG, oil/индекс-ртс-нефти-и-газа-ru000a0jped9
 market = market.sort_values(by='Дата')
 market.columns = ['m']
 market['r_m'] = 100*(np.log(market.m) - np.log(market.m.shift(1))) #(market.m.pct_change()) # market log return #100 * (sp_price['Close'].pct_change())
 #market['r_m'] = market['r_m'].shift(1)
-
 market = market.dropna()
 
 #SP500
-sp_name = 's-p-500.xlsx' #usd_cad-(fx), s-p-500, eur_usd-(fx)_01, eur_usd-(fx)_02, usd_rub-(банк-россии)
+sp_name = 's-p-500.xlsx' #usd_cad-(fx), s-p-500, eur_usd-(fx)_01, eur_usd-(fx)_02, usd_rub-(банк-россии), oil/s-p-global-oil-index
 us_market = pd.read_excel(f+sp_name, index_col=0, parse_dates=True)
 us_market = us_market.sort_values(by='Дата')
 us_market.columns = ['m']
-us_market['r_sp500'] = 100*(np.log(us_market.m) - np.log(us_market.m.shift(1))) #(us_market.m.pct_change()) # market log return
+us_market['r_f'] = 100*(np.log(us_market.m) - np.log(us_market.m.shift(1))) #(us_market.m.pct_change()) # market log return
 
 # Realized volatility 
 #us_market['r_sp500'] = us_market['r_sp500']**2
@@ -105,28 +73,25 @@ cur_r = 100*(np.log(cur_market.cur) - np.log(cur_market.cur.shift(1))) #(us_mark
 cur_r.name = 'r_cur'
 
 
+# ONLY RF vs USA markets:
+df = pd.merge(market['r_m'], us_market['r_f'], left_index=True, right_index=True, how='left')
+'''
 df = pd.merge(market['r_m'], r_f, left_index=True, right_index=True, how='left')
 df = pd.merge(df, cur_r, left_index=True, right_index=True, how='left')
+'''
 df = df.dropna()
 
-year = '2020'
-to_year = str(int(year) + 1)
-df = df[(df.index>=f"{year}-01-01") & (df.index<=f"{to_year}-01-01")]
+if str(year) == '2022':
+    start_month = '03' #Closed Market in Feb-Mar, 2022
+else:
+    start_month = '01'
+start_date = f"{year}-{start_month}-01"
+df = df[(df.index>=start_date) & (df.index<=f"{to_year}-01-01")]
+print(df.head(3), "\n", df.tail(3))
 
 
-#----------- Distribution of the Realized Market Return---------------
-plt.figure(figsize=(8, 6))
-# Plot distribution of 'ln_expected_change'
-#plt.subplot(1, 2, 1)
-sns.histplot(df["r_m"], bins=15, kde=True, color='blue')
-plt.title(f'Distribution of the Realized Market Return, {year}')
-plt.xlabel('Return')
-plt.ylabel('Frequency')
-plt.grid(True)
-# Adjust layout for better readability
-plt.tight_layout()
-# Show the plots
-plt.show()
+#Distribution of the Realized Market Return
+distr_plot(df["r_m"], year)
 
 
 # Descriptive statistics of returns:
@@ -157,24 +122,26 @@ def get_stats(series):
 
     return descr_stats
 
-# Get statistics for both series
-df_stats = get_stats(df)
-print(df_stats)
-df_stats.to_excel(f'{year}_descr_stats_return_garch.xlsx', index=True)
 
-'''
+
 #Plot of the Returns
 plt.plot(df, label = 'Returns')
 plt.legend(loc='upper right')
 plt.show()
-'''
+
 
 print(df.head(2))
 print(df.tail(2))
 
 
-# Correct Pandas syntax to select multiple columns
-returns = df[['r_m', 'r_f', 'r_cur']]
+returns = df[['r_m', 'r_f']]#, 'r_cur'
+returns.to_excel(f'{year}_retutn_series.xlsx', index=True)
+
+# Get statistics for both series
+df_stats = get_stats(df)
+print(df_stats)
+df_stats.to_excel(f'{year}_descr_stats_return_garch.xlsx', index=True)
+
 
 # Step 1: Fit VAR(1) Model
 var_model = VAR(returns)
@@ -198,44 +165,21 @@ for col in returns.columns:
 # Step 3: Compute Conditional Volatilities
 h_1 = garch_models['r_m'].conditional_volatility
 h_2 = garch_models['r_f'].conditional_volatility
-h_3 = garch_models['r_cur'].conditional_volatility
+#h_3 = garch_models['r_cur'].conditional_volatility
 
 # Plots of estimated conditional volatilities
 condit_volatility = pd.merge(h_1, h_2, left_index=True, right_index=True, how='left')
-condit_volatility = pd.merge(condit_volatility, h_3, left_index=True, right_index=True, how='left')
+#condit_volatility = pd.merge(condit_volatility, h_3, left_index=True, right_index=True, how='left')
 condit_volatility.columns = returns.columns.tolist()
 print("Conditional volatilities DF:\n", condit_volatility.head(3))
-
-
-#==================Conditional volatilities==================
-plt.figure(figsize=(8, 5))
-for col in condit_volatility.columns:
-    plt.plot(condit_volatility.index, condit_volatility[col], label=col)
-plt.title(f'Conditional Volatilities, {year}', fontsize=14)
-plt.xlabel("", fontsize=10) #year
-plt.ylabel('Volatility, b.p.', fontsize=10)
-plt.grid(True)
-add_sanction_line(sanctions, condit_volatility)
-# Add custom red dotted line (not actually plotted)
-custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-plt.legend(loc='upper right', fontsize=14, framealpha=0.5) #upper lower left
-# Get the current axis
-ax = plt.gca()
-# Set x-axis ticks to three times per month at valid trading days
-ax.xaxis.set_major_locator(mdates.MonthLocator())
-# Format labels as '03/10'
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
-# Rotate labels for readability
-plt.xticks(rotation=45)
-# Show the plot
-plt.tight_layout()
-plt.show()
+# Conditional volatilities Plot setup
+cond_volatility_plot(condit_volatility, year, sanctions)
 
 
 # Step 4: Compute Constant Conditional Correlation
 rho_12 = pearsonr(residuals['r_m'], residuals['r_f'])[0] #for h_1 and h_2
-rho_13 = pearsonr(residuals['r_m'], residuals['r_cur'])[0] #for h_1 and h_3
-rho_23 = pearsonr(residuals['r_f'], residuals['r_cur'])[0] #for h_2 and h_3
+#rho_13 = pearsonr(residuals['r_m'], residuals['r_cur'])[0] #for h_1 and h_3
+#rho_23 = pearsonr(residuals['r_f'], residuals['r_cur'])[0] #for h_2 and h_3
 
 # Step 5: Compute Conditional Covariances
 cond_covariances = rho_12 * h_1 * h_2
@@ -247,28 +191,5 @@ cond_covariances.name = cond_cov_name
 print("\nConstant Conditional Correlation (ρ_12):", rho_12)
 print("\nFirst 3 Conditional Covariance Values:\n", cond_covariances.tail(3))
 
-
-
-#================================Conditional Covariance Plot setup================================
-# Plot setup
-plt.figure(figsize=(8, 5))
-sns.lineplot(x=cond_covariances.index, y=cond_covariances, label=f"Conditional Covariance", color="blue")
-plt.title(f'Conditional Covariance, {cond_cov_name}, {year}', fontsize=14)
-# Formatting
-plt.xlabel("")#Date
-plt.ylabel("")# Covariance, b.p.
-plt.xticks(rotation=45)
-plt.grid(True)
-add_sanction_line(sanctions, cond_covariances)
-custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-plt.legend(loc='upper left', fontsize=14) #upper right lower left
-ax = plt.gca()
-# Set x-axis ticks to three times per month at valid trading days
-ax.xaxis.set_major_locator(mdates.MonthLocator())
-# Format labels as '03/10'
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
-# Rotate labels for readability
-plt.xticks(rotation=45)
-# Show the plot
-plt.tight_layout()
-plt.show()
+# Conditional Covariance Plot setup
+cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions)
