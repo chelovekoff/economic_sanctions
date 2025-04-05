@@ -3,3 +3,6 @@ matplotlib==3.8.3
 statsmodels==0.14.1
 openpyxl==3.1.2
 seaborn==0.13.2
+pycwt==0.4.0b0
+mgarch==0.3.0
+yfinance==0.2.54
