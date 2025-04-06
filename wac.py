@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
@@ -9,30 +10,13 @@ from pycwt.wavelet import Morlet
 from scipy.ndimage import uniform_filter1d  # for consistent output shape
 import matplotlib.dates as mdates
 
-year = '2021'
+from config import config
+from garch_plot import add_sanction_line
 
-def add_sanction_line(sanctions, df):
-    '''Add highlighted regions'''
-    for date in sanctions:
-        date = pd.Timestamp(date)  # Ensure it's a Timestamp
-        for offset in range(3):  # Check date, date+1, date+2
-            shifted_date = date + pd.Timedelta(days=offset)
-            if shifted_date in df.index:
-                idx = df.index.get_loc(shifted_date)  # Get index
-                start_idx = max(0, idx - 5)
-                end_idx = min(len(df) - 1, idx + 5)
+sanction_list = config.sanction_list
+sanctions = pd.to_datetime(sanction_list)
 
-                start_date = df.index[start_idx]
-                end_date = df.index[end_idx]
-
-                plt.axvspan(start_date, end_date, color="gray", alpha=0.3)
-                plt.axvline(x=shifted_date, color='red', linewidth=2.5, linestyle='--')
-                break  # Stop checking once a valid date is found
-
-            '''# Annotate specific date
-            value_at_date = df.loc[date, "cond_cov"]
-            plt.text(date, value_at_date, f"{date.strftime('%Y-%m-%d')}", 
-                    fontsize=10, color="red", ha="center", va="bottom", fontweight="bold")'''
+year = '2023'
 
 def wavelet_smooth(power, scales, dt):
     """Smooth wavelet power spectra in time and scale."""
@@ -162,18 +146,6 @@ def wavelet_coherence_analysis(df, sanctions):
 
 # USING
     
-sanction_list = [
-    #'2022-05-30', overlapping
-    '2022-06-03', #6th package - oil import, SWIFT
-    '2022-09-02', #8th package - announcment
-    '2022-10-06', #8th package - imposition
-    '2022-12-05',
-    '2023-02-04', #!!! 8th package - oil price ceiling imposition
-    '2023-06-23', # 11th package - tanker fleet +PR
-    '2023-12-18'
-]
-
-
 f = "stock_data/"
 
 # Risk free rate:
@@ -217,14 +189,6 @@ cur_r = 100*(np.log(cur_market.cur) - np.log(cur_market.cur.shift(1))) #(us_mark
 cur_r.name = 'r_cur'
 # Realized volatility 
 cur_r = cur_r**2
-
-
-#VIX
-vix_name = 'vix-index.xlsx'
-vix = pd.read_excel(f+vix_name, index_col=0, parse_dates=True)
-vix = vix.sort_values(by='Дата')
-vix.columns = ['vix_value']
-vix['d_vix'] = vix.vix_value - vix.vix_value.shift(1)# different in VIX
 
 
 df = pd.merge(market['r_m'], r_f, left_index=True, right_index=True, how='left')
