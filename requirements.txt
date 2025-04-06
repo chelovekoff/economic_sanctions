@@ -6,3 +6,4 @@ seaborn==0.13.2
 pycwt==0.4.0b0
 mgarch==0.3.0
 yfinance==0.2.54
+python-dotenv==1.0.1
