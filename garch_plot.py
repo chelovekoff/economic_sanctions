@@ -47,14 +47,14 @@ def add_sanction_line(sanctions, df):
             shifted_date = date + pd.Timedelta(days=offset)
             if shifted_date in df.index:
                 idx = df.index.get_loc(shifted_date)  # Get index
-                start_idx = max(0, idx - 5)
-                end_idx = min(len(df) - 1, idx + 5)
+                start_idx = max(0, idx - 3)
+                end_idx = min(len(df) - 1, idx + 3)
 
                 start_date = df.index[start_idx]
                 end_date = df.index[end_idx]
 
-                plt.axvspan(start_date, end_date, color="gray", alpha=0.3)
-                plt.axvline(x=shifted_date, color='red', linewidth=2.5, linestyle='--')
+                plt.axvspan(start_date, end_date, color="gray", alpha=0.1)
+                plt.axvline(x=shifted_date, color='grey', linewidth=1.0, linestyle='--')
                 break  # Stop checking once a valid date is found
 
             '''# Annotate specific date
@@ -82,7 +82,7 @@ def cond_volatility_plot(condit_volatility, year, sanctions):
     plt.xlabel("", fontsize=10) #year
     plt.ylabel('Volatility, b.p.', fontsize=10)
     plt.grid(True)
-    if str(year) in ['2022', '2023']:
+    if str(year) in ['2020','2021','2022', '2023']:
         add_sanction_line(sanctions, condit_volatility)
         # Add custom red dotted line (not actually plotted)
         custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
@@ -123,7 +123,7 @@ def cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions):
     plt.ylabel("")# Covariance, b.p.
     plt.xticks(rotation=45)
     plt.grid(True)
-    if str(year) in ['2022', '2023']:
+    if str(year) in ['2020','2021','2022', '2023']:
         add_sanction_line(sanctions, cond_covariances)
         # Add custom red dotted line (not actually plotted)
         custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line

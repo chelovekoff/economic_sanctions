@@ -8,10 +8,11 @@ import matplotlib.dates as mdates
 from config import config
 
 from garch_plot import cond_volatility_plot, cond_covariance_plot
+from index_plot import performance_plot
 from functions import obtain_return
 
 
-sanction_list = config.sanction_list
+sanction_list = config.fomc_list
 sanctions = pd.to_datetime(sanction_list)
 
 data_files = config.data_files
@@ -31,6 +32,8 @@ if os.path.exists(preloaded_returns):
     returns = returns.set_index('Date')
     first_index_abb = returns.columns[0]
     second_index_abb = returns.columns[1]
+    first_index_filename = data_files[first_index_abb]
+    second_index_filename = data_files[second_index_abb]
 
 else:
     # Otherwise, manual inputing the first required variable:
@@ -75,6 +78,9 @@ else:
 start_date = f"{year}-{start_month}-01"
 returns = returns[(returns.index>=start_date) & (returns.index<=f"{to_year}-01-01")]
 print(returns.head(3), "\n", returns.tail(3))
+
+# Plot of two indices performance:
+performance_plot(f, first_index_filename, second_index_filename, first_index_abb, second_index_abb, year, start_date, to_year, sanctions, eng=False)
 
 returns.plot()
 plt.show()
@@ -136,6 +142,11 @@ def neg_loglik(params):
 # Initial guess for parameters (e.g., zeros for AR, small positives for GARCH terms, sample corr for rho)
 init_params = np.array([
     y1.mean(), y2.mean(),   # mu1, mu2
+    #Initial parameters according to Syriopoulos et al. (2015)
+    #0.14, 0.027, 0.045, -0.04,     # phi11, phi12, phi21, phi22
+    #0.52, 0.02,               # c1, c2
+    #0.25, 0.03, 0.07, 0.02,     # a11, a21, a12, a22
+    #0.62, 0.25, 0.007, 0.91,     # b11, b21, b12, b22
     0.1, 0.05, 0.05, 0.1,     # phi11, phi12, phi21, phi22
     0.2, 0.2,               # c1, c2
     0.3, 0.1, 0.1, 0.3,     # a11, a21, a12, a22
@@ -209,6 +220,9 @@ print("===== Estimation Results =====")
 print(results_df)
 print("\nMaximized Log-Likelihood =", round(max_loglik, 5))
 
+
+# Svaing the results of VAR-GARCH estimation in .CSV
+results_df.to_csv(f'results/{year}_var-garch_{first_index_abb}-{second_index_abb}.csv', index=True)
 
 
 
