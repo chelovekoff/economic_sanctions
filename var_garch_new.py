@@ -12,7 +12,7 @@ from index_plot import performance_plot
 from functions import obtain_return
 
 
-sanction_list = config.fomc_list
+sanction_list = config.fomc_list # fomc_list, sanction_list, us_fin_sanction_dates
 sanctions = pd.to_datetime(sanction_list)
 
 data_files = config.data_files
@@ -80,11 +80,13 @@ returns = returns[(returns.index>=start_date) & (returns.index<=f"{to_year}-01-0
 print(returns.head(3), "\n", returns.tail(3))
 
 # Plot of two indices performance:
-performance_plot(f, first_index_filename, second_index_filename, first_index_abb, second_index_abb, year, start_date, to_year, sanctions, eng=False)
+#performance_plot(f, first_index_filename, second_index_filename, first_index_abb, second_index_abb, year, start_date, to_year, sanctions, eng=False)
 
+'''
+# Plot of the two log-retutns
 returns.plot()
 plt.show()
-
+'''
 
 # Prepare data (pandas DataFrame `df` with two return series):
 y1 = returns.iloc[:,0].values  # series 1 returns
@@ -104,24 +106,24 @@ def neg_loglik(params):
     if rho <= -0.999 or rho >= 0.999:
         return 1e8  # penalty for invalid rho
     # Initialize conditional variances
-    h1 = np.var(y1)  # start with sample variance
-    h2 = np.var(y2)
+    h1_prev = np.var(y1)  # start with sample variance
+    h2_prev = np.var(y2)
     # Initial residuals (at t=1, no lagged data, so using mean only)
     e1_prev = y1[0] - mu1
     e2_prev = y2[0] - mu2
     # Compute log-likelihood
     loglik = 0.0
     # Contribution of first observation (t=1)
-    z1 = e1_prev / np.sqrt(h1)
-    z2 = e2_prev / np.sqrt(h2)
-    log_det = np.log(h1) + np.log(h2) + np.log(1 - rho**2)   # log |H_1|
+    z1 = e1_prev / np.sqrt(h1_prev)
+    z2 = e2_prev / np.sqrt(h2_prev)
+    log_det = np.log(h1_prev) + np.log(h2_prev) + np.log(1 - rho**2)   # log |H_1|
     quad_form = (z1**2 - 2*rho*z1*z2 + z2**2) / (1 - rho**2)  # Mahalanobis term
     loglik += -0.5 * (np.log(2*np.pi)*2 + log_det + quad_form)
     # Recursively compute for t=2,...,T
     for t in range(1, T):
         # Update variances h1_t and h2_t using previous shocks and variances
-        h1 = c1**2 + a11**2 * e1_prev**2 + a21**2 * e2_prev**2 + b11**2 * h1 + b21**2 * h2
-        h2 = c2**2 + a12**2 * e1_prev**2 + a22**2 * e2_prev**2 + b12**2 * h1 + b22**2 * h2
+        h1 = c1**2 + a11**2 * e1_prev**2 + a21**2 * e2_prev**2 + b11**2 * h1_prev + b21**2 * h2_prev
+        h2 = c2**2 + a12**2 * e1_prev**2 + a22**2 * e2_prev**2 + b12**2 * h1_prev + b22**2 * h2_prev
         # Ensure positivity (penalize if any variance is non-positive)
         if h1 <= 0 or h2 <= 0:
             return 1e8
@@ -135,6 +137,7 @@ def neg_loglik(params):
         quad_form = (z1**2 - 2*rho*z1*z2 + z2**2) / (1 - rho**2)
         loglik += -0.5 * (np.log(2*np.pi)*2 + log_det + quad_form)
         # Roll over residuals and variances for next iteration
+        h1_prev, h2_prev = h1, h2
         e1_prev, e2_prev = e1, e2
     # Return negative log-likelihood for minimization
     return -loglik
@@ -210,10 +213,10 @@ t_stats = estimates / std_errors
 p_values = 2 * (1 - norm.cdf(abs(t_stats)))  # two-tailed
 
 results_df = pd.DataFrame({
-    'Estimate': (np.round(estimates, 5)),
-    'Std. Error': (np.round(std_errors, 5)),
-    't-stat': (np.round(t_stats, 5)),
-    'p-value': (np.round(p_values, 5))
+    'Estimate': (np.round(estimates, 3)),
+    'Std. Error': (np.round(std_errors, 3)),
+    't-stat': (np.round(t_stats, 3)),
+    'p-value': (np.round(p_values, 3))
 }, index=param_names)
 
 print("===== Estimation Results =====")
@@ -283,7 +286,7 @@ h2.index = returns.index
 condit_volatility = pd.merge(h1, h2, left_index=True, right_index=True, how='left')
 
 # Conditional volatilities Plot
-cond_volatility_plot(condit_volatility, year, sanctions)
+cond_volatility_plot(condit_volatility, year, sanctions, eng=False)
 
 # Extract Constant Conditional Correlation
 rho = result.x[16]
@@ -299,5 +302,5 @@ print("\nConstant Conditional Correlation (ρ_12):", rho)
 print("\nFirst 3 Conditional Covariance Values:\n", cond_covariances.tail(3))
 
 # Conditional Covariance Plot setup
-cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions)
+cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions, eng=False)
 
