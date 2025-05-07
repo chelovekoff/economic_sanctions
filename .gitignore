@@ -18,6 +18,9 @@ test.py
 *.xls
 *.xlsx
 
+/results
+/editing
+
 
 /my_python
 
