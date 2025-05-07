@@ -11,12 +11,12 @@ from scipy.ndimage import uniform_filter1d  # for consistent output shape
 import matplotlib.dates as mdates
 
 from config import config
+from functions import obtain_return
 from garch_plot import add_sanction_line
 
-sanction_list = config.sanction_list
+sanction_list = config.sanction_list # fomc_list, sanction_list, us_fin_sanction_dates
 sanctions = pd.to_datetime(sanction_list)
 
-year = '2023'
 
 def wavelet_smooth(power, scales, dt):
     """Smooth wavelet power spectra in time and scale."""
@@ -31,13 +31,14 @@ def wavelet_smooth(power, scales, dt):
         smooth_power[:, j] = uniform_filter1d(smooth_power[:, j], size=3, mode='nearest')
     return smooth_power
 
-def wavelet_coherence_analysis(df, sanctions):
+def wavelet_coherence_analysis(df, sanctions, eng=True):
     '''
     Obtain Wavelet Coherence spectrogram of two signals
 
     Parameters:
     df (Pandas.Dataframe): dataframe with two variables (voatilities)
     sanctions (list): list with dates in string format ('yyyy-mm-dd')
+    eng (Boolean): The legend language , True if English, False if Russian
    
     Returns:
     WCA spectrogram with highlighted dates.
@@ -49,7 +50,22 @@ def wavelet_coherence_analysis(df, sanctions):
 
     x1 = df.iloc[:,0].values
     x2 = df.iloc[:,1].values
-    wca_name = f'{df.columns[0]} vs {df.columns[1]}'
+    wca_name = f'{df.columns[0]} и {df.columns[1]}' # vs
+
+    # Plot legend settings
+    if eng:
+        coherence_label = 'Coherence'
+        ci_line = 'Cone of Influence'
+        oy_line = 'Time Horizon (Days)'
+        plot_title = f"Wavelet Coherence Analysis: {wca_name}"
+        vertical_name = 'Sanctions'
+    else:
+        coherence_label = f'Когерентность'
+        ci_line = 'Конус влияния'
+        oy_line = 'Временной горизонт, в днях'
+        plot_title = f'{wca_name}, {year}'
+        vertical_name = 'Санкции EC' #'Оъявления ФРС' , 'Санкции США', 'ЕС'
+
 
     # Set wavelet parameters
     mother = wavelet.Morlet(6)
@@ -80,10 +96,13 @@ def wavelet_coherence_analysis(df, sanctions):
 
     # Plot coherence
     fig, ax = plt.subplots(figsize=(12, 6))
+    fig.subplots_adjust(left=0.1, right=1, top=0.93, bottom=0.08)
     T, P = np.meshgrid(df.index, period_days)
     
     c = ax.contourf(T, P, WCT, levels=np.linspace(0, 1, 11), cmap="jet") #cmap='jet' cmap="coolwarm" , extend='both'
-    plt.colorbar(c, label="Coherence")
+    #plt.colorbar(c, label=coherence_label)
+    cbar = plt.colorbar(c)
+    cbar.set_label(coherence_label, fontsize=14)
     
     # Add uniform phase arrows across the grid
     step_time = 10  # Interval for arrows along time axis
@@ -104,7 +123,7 @@ def wavelet_coherence_analysis(df, sanctions):
               scale=15, width=0.005, headwidth=3, headlength=5, color='black')
 
     # Plot Cone of Influence (coi in scale units, approx. equal to period for Morlet)
-    ax.plot(df.index, coi, "--k", linewidth=1.5, label="Cone of Influence")
+    ax.plot(df.index, coi, "--k", linewidth=1.5, label=ci_line)
 
     # Create a mask for areas outside the COI
     coi_mask = P > coi[np.newaxis, :]  # Broadcasting COI to match P's shape
@@ -118,9 +137,9 @@ def wavelet_coherence_analysis(df, sanctions):
     ax.set_yticklabels([f"{int(t)}" for t in ax.get_yticks()])
 
     # Labels and title
-    ax.set_xlabel(f"Months, {year}", fontsize=14)
-    ax.set_ylabel("Time Horizon (Days)", fontsize=14)
-    ax.set_title(f"Wavelet Coherence Analysis: {wca_name}", fontsize=14)
+    ax.set_xlabel("", fontsize=10) # f"Months, {year}"
+    ax.set_ylabel(oy_line, fontsize=14)
+    ax.set_title(plot_title, fontsize=14) # f"Wavelet Coherence Analysis: {wca_name}"
 
     # Customize x-axis: set month abbreviation and vertical labels
     ax.xaxis.set_major_locator(mdates.MonthLocator())  # Show ticks every month
@@ -134,10 +153,11 @@ def wavelet_coherence_analysis(df, sanctions):
     # Optional: adding grey area for absence of tradings in 2022:
     plt.axvspan("2022-02-24", "2022-03-28", color="gray", alpha=0.9)
     '''
-    
-    add_sanction_line(sanctions, df)
-    # Add custom red dotted line (not actually plotted)
-    custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
+
+    if str(year) in ['2020','2021','2022', '2023']:
+        add_sanction_line(sanctions, df)
+        # Add custom red dotted line (not actually plotted)
+        custom_line, = plt.plot([], [], 'r--', label=vertical_name)  # 'r--' = red dotted line # 'k:' = k dotted line
 
     plt.legend()
     plt.legend(loc='upper right', fontsize=14) #upper right lower left
@@ -145,67 +165,77 @@ def wavelet_coherence_analysis(df, sanctions):
 
 
 # USING
-    
+#==========================================================================================
+#Input required data: time-series and a year of estimation
+data_files = config.data_files
+vars_list = list(data_files.keys())
+possible_vars = '/'.join(vars_list)
+
 f = "stock_data/"
 
-# Risk free rate:
-filename_rf = 'rgbitr-ru000a0jqv87.xlsx' #rub-yield-curve-1y,  s-p-500, rgbitr-ru000a0jqv87
-risk_free = pd.read_excel(f+filename_rf, index_col=0, parse_dates=True)
-risk_free = risk_free.sort_values(by='Дата')
-risk_free.columns = ['r_f']
-#First Difference:
-#r_f = 1*((risk_free.r_f) - (risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_free['r_f'].shift(1))
-#Log-Return:
-r_f = 100*(np.log(risk_free.r_f) - np.log(risk_free.r_f.shift(1)))# (risk_free['r_f'] - risk_free['r_f'].shift(1))
-r_f.name = 'r_f'
-# Realized volatility 
-r_f = r_f**2
-print(r_f.head())
-r_f = r_f.dropna()
+# Checking if there is a required data set in the project folder:
+preloaded_returns = 'returns.csv'
 
-#Market data
-market = pd.read_excel(f+'oil/MOEXOG.xlsx', index_col=0, parse_dates=True) #rtsi, imoex, eur_usd-(fx)_02, usd_cad-(fx)_02, oil/MOEXOG
-market = market.sort_values(by='Дата')
-market.columns = ['m']
-market['r_m'] = 100*(np.log(market.m) - np.log(market.m.shift(1))) #(market.m.pct_change()) # market log return #100 * (sp_price['Close'].pct_change())
-# Realized volatility 
-market['r_m'] = market['r_m']**2
-#market['r_m'] = market['r_m'].shift(1)
-market = market.dropna()
+if os.path.exists(preloaded_returns):
+    # Load ready data with two indices returns if it exists
+    returns = pd.read_csv(preloaded_returns)
+    returns = returns.rename(columns={'Дата': 'Date'})
+    returns['Date'] = pd.to_datetime(returns['Date'])
+    returns = returns.set_index('Date')
+    first_index_abb = returns.columns[0]
+    second_index_abb = returns.columns[1]
+    first_index_filename = data_files[first_index_abb]
+    second_index_filename = data_files[second_index_abb]
 
-#SP500
-sp_name = 's-p-500.xlsx' #usd_cad-(fx), s-p-500, eur_usd-(fx)_01, eur_usd-(fx)_02, usd_rub-(банк-россии)
-us_market = pd.read_excel(f+sp_name, index_col=0, parse_dates=True)
-us_market = us_market.sort_values(by='Дата')
-us_market.columns = ['m']
-us_market['r_sp500'] = 100*(np.log(us_market.m) - np.log(us_market.m.shift(1))) #(us_market.m.pct_change()) # market log return
+else:
+    # Otherwise, manual inputing the first required variable:
+    while True:
+        try:
+            first_index_abb = str(input(f"Input the first variable for VAR-GARCH estimation ('{possible_vars}'): ")).strip().upper()
+            if first_index_abb in vars_list:
+                vars_list.remove(first_index_abb)
+                possible_vars = '/'.join(vars_list)
+                first_index_filename = data_files[first_index_abb]
+                break
+        except ValueError:
+            print(f"Please input a valid variable ('{possible_vars}').")
+    # manual inputing the second required variable:
+    while True:
+        try:
+            second_index_abb = str(input(f"Input the second variable for VAR-GARCH estimation ('{possible_vars}'): ")).strip().upper()
+            if second_index_abb in vars_list:
+                second_index_filename = data_files[second_index_abb]
+                break
+        except ValueError:
+            print(f"Please input a valid variable ('{possible_vars}').")
 
-# Currency data
-cur_name = 'usd_rub-(банк-россии).xlsx' #usd_cad-(fx), s-p-500, eur_usd-(fx)_01, eur_usd-(fx)_02, usd_rub-(банк-россии), usd_eur-(fx)
-cur_market = pd.read_excel(f+cur_name, index_col=0, parse_dates=True)
-cur_market = cur_market.sort_values(by='Дата')
-cur_market.columns = ['cur']
-cur_r = 100*(np.log(cur_market.cur) - np.log(cur_market.cur.shift(1))) #(us_market.m.pct_change()) # market log return
-cur_r.name = 'r_cur'
-# Realized volatility 
-cur_r = cur_r**2
+    # Load Indices
+    return_first = obtain_return(f, first_index_filename, first_index_abb) # Loading the first index return
+    return_second = obtain_return(f, second_index_filename, second_index_abb) # Loading the second index return
+    returns = pd.merge(return_first, return_second, left_index=True, right_index=True, how='left')
+    returns = returns.dropna()
 
-
-df = pd.merge(market['r_m'], r_f, left_index=True, right_index=True, how='left')
-df = pd.merge(df, cur_r, left_index=True, right_index=True, how='left')
-df = df.dropna()
-
+# Input the year:
+while True:
+    try:
+        year = int(input("Input the year of the calculation start (in the 'yyyy' format): "))
+        break  # Exit the loop if successfully converted to an integer.
+    except ValueError:
+        print("Please enter a valid integer.")
 to_year = str(int(year) + 1)
-df = df[(df.index>=f"{year}-01-01") & (df.index<=f"{to_year}-01-01")]
-print(len(df))
-print(df.head(3), "\n", df.tail(3))
+if str(year) == '2022':
+    start_month = '03'
+else:
+    start_month = '01'
+start_date = f"{year}-{start_month}-01"
+returns = returns[(returns.index>=start_date) & (returns.index<=f"{to_year}-01-01")]
 
+# Realized volatility 
+volatilities = returns**2
+print(volatilities.head(3), "\n", volatilities.tail(3))
 
 #Realized volatilities plot
-df.plot()
-plt.show()
+#volatilities.plot()
+#plt.show()
 
-rm = 'r_m' # Stock Index Volatility
-rf = 'r_f' # Government Bond Index Volatility
-rc = 'r_cur' # Exchange Rate Volatility
-wavelet_coherence_analysis(df[[rf, rc]], sanction_list)
+wavelet_coherence_analysis(volatilities, sanction_list, eng=False)
