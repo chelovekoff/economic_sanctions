@@ -6,7 +6,7 @@ load_dotenv()
 class config:
     """common config constants"""
 
-
+    # EU-Sanctions against Oil&Gas
     sanction_list: list = [
         #'2022-05-30', #overlapping
         '2022-06-03', # 6th package - oil import, SWIFT
@@ -17,6 +17,23 @@ class config:
         '2023-06-23', # 11th package - tanker fleet +PR
         '2023-12-18'
     ]
+
+    # US-Sanctions against Finance
+    us_fin_sanction_dates = [
+        '2022-04-06',
+        '2022-05-08',
+        '2022-05-24',
+        '2022-06-27',
+        '2022-09-30',
+        '2022-12-15',
+        '2023-02-24',
+        '2023-05-19',
+        '2023-07-20',
+        '2023-09-14',
+        '2023-11-02',
+        '2023-12-22',
+    ]
+
 
     # https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
     fomc_list: list = [
@@ -119,5 +136,7 @@ class config:
         #'VIX': 'vix-index',
         'SP500': 's-p-500',
         'RGBITR': 'rgbitr-ru000a0jqv87',
-        'RYC': 'rub-yield-curve-1y'
+        'RYC': 'rub-yield-curve-1y',
+        'MOEXOG': 'oil/MOEXOG',
+        'MOEXFN': 'fin/MOEXFN'
     }

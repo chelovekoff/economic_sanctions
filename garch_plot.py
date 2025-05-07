@@ -43,7 +43,7 @@ def add_sanction_line(sanctions, df):
     '''
     for date in sanctions:
         date = pd.Timestamp(date)  # Ensure it's a Timestamp
-        for offset in range(3):  # Check date, date+1, date+2
+        for offset in range(5):  # Check date, date+1, date+2
             shifted_date = date + pd.Timedelta(days=offset)
             if shifted_date in df.index:
                 idx = df.index.get_loc(shifted_date)  # Get index
@@ -53,8 +53,8 @@ def add_sanction_line(sanctions, df):
                 start_date = df.index[start_idx]
                 end_date = df.index[end_idx]
 
-                plt.axvspan(start_date, end_date, color="gray", alpha=0.1)
-                plt.axvline(x=shifted_date, color='grey', linewidth=1.0, linestyle='--')
+                plt.axvspan(start_date, end_date, color="gray", alpha=0.3)
+                plt.axvline(x=shifted_date, color='red', linewidth=1.0, linestyle='--')
                 break  # Stop checking once a valid date is found
 
             '''# Annotate specific date
@@ -63,7 +63,7 @@ def add_sanction_line(sanctions, df):
                     fontsize=10, color="red", ha="center", va="bottom", fontweight="bold")'''
 
 
-def cond_volatility_plot(condit_volatility, year, sanctions):
+def cond_volatility_plot(condit_volatility, year, sanctions, eng=True):
     '''
     Conditional volatilities Plot setup
 
@@ -75,24 +75,37 @@ def cond_volatility_plot(condit_volatility, year, sanctions):
     Returns:
     Plot of two conditional volatilities with hilighted sanctions dates.
     '''
-    plt.figure(figsize=(8, 5))
+    if eng:
+        plot_title = f'Conditional Volatilities: {condit_volatility.columns[0]} vs {condit_volatility.columns[1]}, {year}'
+        vertical_name = 'FOMC'
+        oy_axes = 'Volatility, b.p.'
+    else:
+        plot_title = f'{year}'
+        vertical_name = 'Оъявления ФРС' #'Оъявления ФРС', 'ЕС', Санкции США
+        oy_axes = 'Волатильность, б.п.'
+
+
+    plt.figure(figsize=(5, 3)) # 8, 5
+    #plt.plot(condit_volatility.index, condit_volatility.iloc[:,0], 'k-', label=condit_volatility.columns[0], linewidth=2.0, color='grey')
+    #plt.plot(condit_volatility.index, condit_volatility.iloc[:,1], 'k--', label=condit_volatility.columns[1], linewidth=2.0)
+    # old defining:
     for col in condit_volatility.columns:
         plt.plot(condit_volatility.index, condit_volatility[col], label=col)
-    plt.title(f'Conditional Volatilities, {year}', fontsize=14)
-    plt.xlabel("", fontsize=10) #year
-    plt.ylabel('Volatility, b.p.', fontsize=10)
+    plt.title(plot_title, fontsize=14)
+    plt.xlabel("", fontsize=9) #year
+    plt.ylabel(oy_axes, fontsize=10)
     plt.grid(True)
     if str(year) in ['2020','2021','2022', '2023']:
         add_sanction_line(sanctions, condit_volatility)
         # Add custom red dotted line (not actually plotted)
-        custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-    plt.legend(loc='upper right', fontsize=14, framealpha=0.5) #upper lower left
+        custom_line, = plt.plot([], [], 'r--', label=vertical_name)  # 'r--' = red dotted line # 'k:' = k dotted line
+    plt.legend(loc='lower left', fontsize=10, framealpha=0.5) #upper lower left, right
     # Get the current axis
     ax = plt.gca()
     # Set x-axis ticks to three times per month at valid trading days
     ax.xaxis.set_major_locator(mdates.MonthLocator())
     # Format labels as '03/10'
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b')) #%d/%m
     # Rotate labels for readability
     plt.xticks(rotation=45)
     # Show the plot
@@ -100,7 +113,7 @@ def cond_volatility_plot(condit_volatility, year, sanctions):
     plt.show()
 
 
-def cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions):
+def cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions, eng=True):
     '''
     Conditional Covariance Plot setup
 
@@ -113,11 +126,19 @@ def cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions):
     Returns:
     Plot of Conditional Covariance with hilighted sanctions dates.
     '''
+    if eng:
+        line_title = 'Conditional Covariance'
+        plot_title = f'{line_title}: {cond_cov_name}, {year}'
+        vertical_name = 'FOMC'
+    else:
+        line_title = f'Условная Ковариация'
+        plot_title = f'{year}'
+        vertical_name = 'Оъявления ФРС' #'Оъявления ФРС' , 'Санкции США', 'ЕС'
 
     # Plot setup
-    plt.figure(figsize=(8, 5))
-    sns.lineplot(x=cond_covariances.index, y=cond_covariances, label=f"Conditional Covariance", color="blue")
-    plt.title(f'Conditional Covariance, {cond_cov_name}, {year}', fontsize=14)
+    plt.figure(figsize=(5, 3)) #  8, 5
+    sns.lineplot(x=cond_covariances.index, y=cond_covariances, label=line_title, color="blue") # , color="black"
+    plt.title(plot_title, fontsize=14)
     # Formatting
     plt.xlabel("")#Date
     plt.ylabel("")# Covariance, b.p.
@@ -126,13 +147,13 @@ def cond_covariance_plot(cond_covariances, cond_cov_name, year, sanctions):
     if str(year) in ['2020','2021','2022', '2023']:
         add_sanction_line(sanctions, cond_covariances)
         # Add custom red dotted line (not actually plotted)
-        custom_line, = plt.plot([], [], 'r--', label='sanctions')  # 'r--' = red dotted line
-    plt.legend(loc='upper left', fontsize=14) #upper right lower left
+        custom_line, = plt.plot([], [], 'r--', label=vertical_name)  # 'r--' = red dotted line # 'k:' = k dotted line
+    plt.legend(loc='upper right', fontsize=10) #upper right lower left
     ax = plt.gca()
     # Set x-axis ticks to three times per month at valid trading days
     ax.xaxis.set_major_locator(mdates.MonthLocator())
     # Format labels as '03/10'
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b')) #%d/%m
     # Rotate labels for readability
     plt.xticks(rotation=45)
     # Show the plot
